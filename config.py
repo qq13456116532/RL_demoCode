@@ -1,5 +1,6 @@
 import os
 import gym
+import torch
 
 import rl_utils
 
@@ -10,6 +11,7 @@ RENDER_MODE_train = "rgb_array"
 RENDER_MODE_test = "human"
 # PG needs 10000，DQNs just 1000
 TRAIN_EPISODES = 1000
+TD3_TRAIN_EPISODES = 200
 TEST_EPISODES = 10
 # PG needs 500 ，DQNs just 50
 MAX_STEPS = 500
@@ -30,7 +32,7 @@ DDPG_gamma = 0.98
 DPPG_tau = 0.005  # 软更新参数
 DDPG_sigma = 0.01  # 高斯噪声标准差
 DDPG_ENV_ID = "Pendulum-v1"
-
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 env_train = gym.make(ENV_ID, render_mode=RENDER_MODE_train)

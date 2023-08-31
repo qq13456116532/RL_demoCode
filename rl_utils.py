@@ -48,6 +48,14 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
+# transition_dict = {'states': [], 'actions': [], 'next_states': [], 'rewards': [], 'dones': []}
+def get_Samples(transition_dict,device):
+    states = torch.tensor(transition_dict['states'], dtype=torch.float).to(device)
+    actions = torch.tensor(transition_dict['actions'], dtype=torch.float).view(-1, 1).to(device)
+    rewards = torch.tensor(transition_dict['rewards'], dtype=torch.float).view(-1, 1).to(device)
+    next_states = torch.tensor(transition_dict['next_states'], dtype=torch.float).to(device)
+    dones = torch.tensor(transition_dict['dones'], dtype=torch.float).view(-1, 1).to(device)
+    return states,actions,rewards,next_states,dones
 
 def moving_average(a, window_size):
     """

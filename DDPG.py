@@ -67,12 +67,7 @@ class DDPG_Agent(BaseAgent):
             param_target.data.copy_(param_target.data * (1.0 - self.tau) + param.data * self.tau)
 
     def update(self, transition_dict):
-        states = torch.tensor(transition_dict['states'], dtype=torch.float).to(self.device)
-        actions = torch.tensor(transition_dict['actions'], dtype=torch.float).view(-1, 1).to(self.device)
-        rewards = torch.tensor(transition_dict['rewards'], dtype=torch.float).view(-1, 1).to(self.device)
-        next_states = torch.tensor(transition_dict['next_states'], dtype=torch.float).to(self.device)
-        dones = torch.tensor(transition_dict['dones'], dtype=torch.float).view(-1, 1).to(self.device)
-
+        states, actions, rewards, next_states, dones = rl_utils.get_Samples(transition_dict, self.device)
         next_q_values = self.target_critic(next_states, self.target_actor(next_states))
         q_targets = rewards + self.gamma * next_q_values * (1 - dones)
         critic_loss = torch.mean(self.critic_loss(self.critic(states, actions), q_targets))
