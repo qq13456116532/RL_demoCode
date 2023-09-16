@@ -6,7 +6,7 @@ Proximal Policy Optimization是一种高效和稳定的策略优化方法。
 
 
 PPO采用以下目标函数进行策略更新 ,见 line.88
-L(θ) = min(π(a|s;θ)/π(a|s;θ_old) * A(s, a), clip(π(a|s;θ)/π(a|s;θ_old), 1-ε, 1+ε) * A(s, a))
+L(θ) = min(π(a|s;θ)/π(a|s;θ_old) * A(s, a), clip[π(a|s;θ)/π(a|s;θ_old), 1-ε, 1+ε] * A(s, a))
 其中，
 - θ: 当前策略的参数
 - θ_old: 上一次策略更新后的参数
