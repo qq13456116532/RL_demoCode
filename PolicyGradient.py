@@ -1,8 +1,25 @@
-import random
+"""
+策略梯度 PG方法是一类直接在策略空间中进行优化的算法。它们通过增加那些获得高奖励的动作的概率来改善策略。
 
-import gym
-import numpy as np
-import torch
+在 PG算法中，策略是通过参数化函数（如神经网络）来表示的，参数通过梯度上升方法来进行更新。
+
+策略梯度公式可以表示为：
+Δθ = α ∇θ log π(a|s;θ) Q(s, a)
+其中，
+- α: 学习率
+- θ: 策略参数
+- π(a|s;θ): 当前策略下，在状态s选择动作a的概率
+- Q(s, a): 动作a在状态s下的Q值
+
+损失函数可以定义为：
+L = -1/N Σ log π(a_i|s_i;θ) Q(s_i, a_i)
+其中，
+- N: mini-batch的大小
+
+这里，我们使用Q值来评估在状态s下执行动作a的优势。该方法试图最大化预期的累积奖励，通过梯度上升来更新策略参数。
+代码中是使用REINFORCE，也就是使用MC方法来估计 Q值，见line.70 ，使用实际奖励来评估
+"""
+
 from torch import nn, optim
 
 import rl_utils
@@ -39,13 +56,9 @@ class PGAgent(BaseAgent):
         return action.cpu().numpy().item()
 
     def update(self, transition_dict):
-        states = torch.FloatTensor(transition_dict['states']).to(self.device)
-        actions = torch.LongTensor(transition_dict['actions']).to(self.device)
-        next_states = torch.FloatTensor(transition_dict['next_states']).to(self.device)
-        rewards = torch.FloatTensor(transition_dict['rewards']).to(self.device)
-        dones = torch.BoolTensor(transition_dict['dones']).to(self.device)
+        states, actions, rewards, next_states, dones = rl_utils.get_Samples(transition_dict, self.device)
         actions_probs = self.net(states)
-        taken_action_probs = actions_probs.gather(1, actions.unsqueeze(-1)).squeeze(-1)
+        taken_action_probs = actions_probs.gather(1, actions).squeeze(-1)
         # Compute discounted rewards (return) for each time step
         # 策略梯度方法（尤其是REINFORCE）通常依赖于每一个时间步的回报（或称为未来的累计奖励）来估计策略的性能
         # torch.arange(len(rewards))生成一个从0到len(rewards)-1的整数序列。
@@ -64,26 +77,31 @@ class PGAgent(BaseAgent):
         loss.backward()
         self.optimizer.step()
 
-
-
-    def __init__(self, state_dim, action_dim, device, reward_gamma, learning_rate, epsilon):
+    def __init__(self, state_dim, action_dim, device, reward_gamma, learning_rate):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.device = device
         self.reward_gamma = reward_gamma
         self.learning_rate = learning_rate
-        self.epsilon = epsilon
         self.net = PolicyGradientNet(self.state_dim, self.action_dim).to(device=self.device)
         self.optimizer = optim.Adam(self.net.parameters(), lr=learning_rate)
         self.loss = nn.CrossEntropyLoss()
 
+
 if __name__ == "__main__":
     ALG_NAME = 'PolicyGradient'
     print("这是强化学习 " + ALG_NAME + " 算法")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    agent =  PGAgent(STATE_DIM,ACTION_DIM,device,REWARD_GAMMA,LEARNING_RATE,Epsilon)
-    env = gym.make(ENV_ID,render_mode=RENDER_MODE_train)
-    rl_utils.train_on_policy_agent(env,agent,TRAIN_EPISODES,Name=ALG_NAME,max_episode_size=MAX_STEPS)
+    learning_rate = 1e-3
+    num_episodes = 1000
+    hidden_dim = 128
+    gamma = 0.98
+    ENV_ID = 'CartPole-v1'
+    env = gym.make(ENV_ID, render_mode=RENDER_MODE_train)
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.n
+
+    agent = PGAgent(state_dim, action_dim, DEVICE, gamma, learning_rate)
+    rl_utils.train_on_policy_agent(env, agent, num_episodes, Name=ALG_NAME, max_episode_size=MAX_STEPS)
     folder_path = './Saved_model/' + ALG_NAME
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)

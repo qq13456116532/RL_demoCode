@@ -1,8 +1,26 @@
+'''
+引入一个双分支神经网络来分别估计状态值函数V(s)和优势函数A(s, a)，从而提高Q值的估计精度和学习稳定性。
+
+该算法的网络结构包含两个部分:
+1. 值网络(Value Network): 估计某一状态的值，而不考虑采取特定动作的影响。
+2. 优势网络(Advantage Network): 估计采取每一动作相对于平均动作的优势或劣势。
+
+Q值由值网络和优势网络共同决定，计算公式如下：
+Q(s, a) = V(s) + (A(s, a) - mean(A(s, a')))
+
+损失函数仍然基于TD误差，形式如下：
+L = 1/N Σ(y_i - Q(s_i, a_i|w))^2
+其中，
+- y_i = r + γ max Q(s', a'|w)
+- N: mini-batch的大小
+- γ: 折扣因子
+
+Dueling DQN算法旨在更好地区分状态值和动作优势，从而使学习更加高效和稳定。
+'''
+
 import random
-
-import torch
-from torch import nn, Tensor, optim
-
+from torch import nn, optim
+import rl_utils
 from BaseAgent import BaseAgent
 from config import *
 
@@ -32,7 +50,7 @@ class DuelingDQN(nn.Module):
 
 class DuelingAgent(BaseAgent):
     def take_action(self, state):
-        if (random.random() < Epsilon):
+        if (random.random() < self.epsilon):
             return random.randint(0, self.action_dim - 1)
         else:
             state = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
@@ -41,22 +59,19 @@ class DuelingAgent(BaseAgent):
 
     # transition_dict = {'states': [], 'actions': [], 'next_states': [], 'rewards': [], 'dones': []}
     def update(self, transition_dict):
-        states = torch.FloatTensor(transition_dict['states']).to(self.device)
-        actions = torch.LongTensor(transition_dict['actions']).to(self.device)
-        next_states = torch.FloatTensor(transition_dict['next_states']).to(self.device)
-        rewards = torch.FloatTensor(transition_dict['rewards']).to(self.device)
-        dones = torch.BoolTensor(transition_dict['dones']).to(self.device)
+        states, actions, rewards, next_states, dones = rl_utils.get_Samples(transition_dict, self.device)
         q_values = self.dueling_dqn(states)
-        q_values = q_values.gather(1, actions.unsqueeze(-1))
+        q_values = q_values.gather(1, actions.long())
         max_next_q_values = self.dueling_dqn(next_states)
         max_next_q_values, _ = max_next_q_values.max(dim=1, keepdim=True)
-        q_tragets = self.gamma * max_next_q_values * (~ dones).float() + rewards
+        q_tragets = self.gamma * max_next_q_values * (1-dones) + rewards
         dqn_loss = torch.mean(self.loss(q_values, q_tragets))
         self.optimizer.zero_grad()
         dqn_loss.backward()
         self.optimizer.step()
 
-    def __init__(self, device, state_dim, action_dim, gamma):
+    def __init__(self, device, state_dim, action_dim, gamma, epsilon):
+        super().__init__()
         self.device = device
         self.dueling_dqn = DuelingDQN(state_dim, action_dim).to(device)
         self.state_dim = state_dim
@@ -64,19 +79,33 @@ class DuelingAgent(BaseAgent):
         self.optimizer = optim.Adam(self.dueling_dqn.parameters())
         self.loss = nn.MSELoss()
         self.gamma = gamma
+        self.epsilon = epsilon
 
 
 if __name__ == "__main__":
     ALG_NAME = 'DuelingDQN'
     print("这是强化学习 " + ALG_NAME + " 算法")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dueling_dqn = DuelingAgent(device, STATE_DIM, ACTION_DIM, REWARD_GAMMA)
+    lr = 1e-3
+    num_episodes = 2000
+    hidden_dim = 128
+    gamma = 0.98
+    # ε-greedy策略
+    epsilon = 0.01
+    target_update = 50
+    buffer_size = 5000
+    minimal_size = 1000
+    batch_size = 64
+    ENV_ID = 'CartPole-v1'
     env = gym.make(ENV_ID, render_mode=RENDER_MODE_train)
-    rl_utils.train_off_policy_agent(env, dueling_dqn, TRAIN_EPISODES, buffer, 128, 16,
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.n
+    dueling_dqn = DuelingAgent(DEVICE, state_dim, action_dim, gamma,epsilon)
+    buffer = rl_utils.ReplayBuffer(buffer_size)
+    rl_utils.train_off_policy_agent(env, dueling_dqn, num_episodes, buffer, minimal_size, batch_size,
                                                 max_episode_size=MAX_STEPS, Name=ALG_NAME)
+
     folder_path = './Saved_model/' + ALG_NAME
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
-
     torch.save(dueling_dqn.dueling_dqn.state_dict(), os.path.join(folder_path, 'model_weights.pth'))
     rl_utils.test_model(ENV_ID, dueling_dqn)

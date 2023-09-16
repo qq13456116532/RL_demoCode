@@ -1,13 +1,10 @@
 import gym
-from tqdm import tqdm
-import numpy as np
+
 import torch
-import collections
-import random
+from tqdm.notebook import tqdm
 
 import collections
 import random
-import numpy as np
 
 import BaseAgent
 from tensorboardX import SummaryWriter
@@ -48,14 +45,16 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
+
 # transition_dict = {'states': [], 'actions': [], 'next_states': [], 'rewards': [], 'dones': []}
-def get_Samples(transition_dict,device):
-    states = torch.tensor(transition_dict['states'], dtype=torch.float).to(device)
-    actions = torch.tensor(transition_dict['actions'], dtype=torch.float).view(-1, 1).to(device)
+def get_Samples(transition_dict, device):
+    states = torch.tensor(np.array(transition_dict['states']), dtype=torch.float).to(device)
+    actions = torch.tensor(transition_dict['actions']).view(-1, 1).to(device)
     rewards = torch.tensor(transition_dict['rewards'], dtype=torch.float).view(-1, 1).to(device)
-    next_states = torch.tensor(transition_dict['next_states'], dtype=torch.float).to(device)
+    next_states = torch.tensor(np.array(transition_dict['next_states']), dtype=torch.float).to(device)
     dones = torch.tensor(transition_dict['dones'], dtype=torch.float).view(-1, 1).to(device)
-    return states,actions,rewards,next_states,dones
+    return states, actions, rewards, next_states, dones
+
 
 def moving_average(a, window_size):
     """
@@ -88,14 +87,14 @@ import numpy as np
 
 
 # 定义一个函数，该函数在给定环境中训练on-policy代理。
-def train_on_policy_agent(env, agent: BaseAgent, num_episodes, Name,max_episode_size):
+def train_on_policy_agent(env, agent: BaseAgent, num_episodes, Name, max_episode_size):
     # 初始化一个列表用于保存每一个情节的总回报
     return_list = []
     writer = SummaryWriter('./tensorboard/exp_' + Name)
     # 主循环运行10次，每次训练num_episodes/10个情节
-    for i in range(10):
+    for iter_num in range(10):
         # 使用tqdm来显示进度条，方便观察训练过程
-        with tqdm(total=int(num_episodes / 10), desc='Iteration %d' % i) as pbar:
+        with tqdm(total=int(num_episodes / 10), desc='Iteration %d' % iter_num) as pbar:
             # 内部循环用于实际的情节训练
             for i_episode in range(int(num_episodes / 10)):
                 # 初始化情节的回报为0
@@ -122,16 +121,16 @@ def train_on_policy_agent(env, agent: BaseAgent, num_episodes, Name,max_episode_
                     state = next_state
                     # 更新情节的总回报
                     episode_return += reward
-                    if len(transition_dict['dones'])>max_episode_size:
-                        break ;
-                writer.add_scalar('episode_return', episode_return, global_step=i_episode + i * int(num_episodes / 10))
+                    if len(transition_dict['dones']) > max_episode_size:
+                        break;
+                writer.add_scalar('episode_return', episode_return, global_step=i_episode + iter_num * int(num_episodes / 10))
                 # 保存该情节的总回报
                 return_list.append(episode_return)
                 # 使用保存的转换信息更新代理
                 agent.update(transition_dict)
                 # 每10个情节更新一次进度条的信息
                 if (i_episode + 1) % 10 == 0:
-                    pbar.set_postfix({'episode': '%d' % (num_episodes / 10 * i + i_episode + 1),
+                    pbar.set_postfix({'episode': '%d' % (num_episodes / 10 * iter_num + i_episode + 1),
                                       'return': '%.3f' % np.mean(return_list[-10:])})
                 # 更新进度条
                 pbar.update(1)
@@ -199,7 +198,6 @@ def train_off_policy_agent(env, agent: BaseAgent, num_episodes, replay_buffer: R
                 pbar.update(1)  # 更新进度条
 
     writer.close()
-    # return return_list  # 返回总回报列表
     # 保存模型权重
     return agent
 
@@ -257,12 +255,9 @@ def test_model(env_id, agent: BaseAgent):
         state, reward, done, t, _ = env.step(action)
         if done:
             print("the return value of this test is : " + str(count))
-            # print("if you want to continue ,please enter C else E : ")
-            state ,info = env.reset()
+            state, info = env.reset()
             count = 0
             # user_in = input()
             # if user_in.upper() == "C":
             #     continue
         count = count + reward
-
-

@@ -1,6 +1,33 @@
-# 适用于连续动作空间,DDPG的改进
+"""
+TD3（Twin Delayed DDPG）是一种改进DDPG的Actor-Critic方法，它引入了三个关键的技术来提高稳定性和样本效率，
+特别是在处理有噪声的环境和连续动作空间时。
+
+核心技术包括：
+1. 双Q值学习（Twin Q-learning）: 通过维护两个独立训练的Q函数和使用较小值来进行价值估计，以减少过高估计的风险。
+2. 延迟策略更新（Delayed Policy Update）: 为了降低价值函数和策略更新之间的耦合度，策略更新的频率是Q函数更新的频率的1/2。
+3. 目标政策平滑化（Target Policy Smoothing）: 通过向目标策略添加噪声，来避免值函数在确定性策略下过于尖锐，这有助于更稳定的学习。
+
+TD3的更新规则如下：
+Critic依旧使用TD误差，见line.107
+L(Q) = E[(Q(s, a) - y)^2]
+其中，
+- y = r + γ * min(Q1'(s', a'), Q2'(s', a'))
+- Q1'和Q2'是目标Q网络
+- a'是目标政策网络产生的动作，但又加上了一个clip后的噪声
+
+策略的损失函数是Q网络的负期望值，见 line.91
+L(π) = -E[Q1(s, π(s))]
+
+这个算法通过迭代更新Q网络和策略网络来找到最优策略，从而实现更稳定和高效的训练。
+
+"""
+
+# ... 接下来是你的代码
+
+
+
+
 import numpy as np
-import torch
 from torch import nn, optim
 
 import rl_utils
@@ -31,7 +58,7 @@ class QCritic(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, state, action):
-        cat = torch.cat([state, action], dim=1)
+        cat = torch.cat([state.float(), action.float()], dim=1)
         x = self.relu(self.fc1(cat))
         x = self.relu(self.fc2(x))
         return self.fc_out(x)
@@ -138,15 +165,31 @@ class TD3_Agent(BaseAgent):
 if __name__ == "__main__":
     ALG_NAME = 'TD3'
     print("这是强化学习 " + ALG_NAME + " 算法")
+    actor_lr = 3e-4
+    critic_lr = 3e-3
+    num_episodes = 1000
+    hidden_dim = 64
+    gamma = 0.98
+    tau = 0.005  # 软更新参数
+    buffer_size = 10000
+    minimal_size = 1000
+    batch_size = 64
+    sigma = 0.01  # 高斯噪声标准差
+    buffer_size = 5000
+    buffer = rl_utils.ReplayBuffer(buffer_size)
+    DDPG_ENV_ID = "Pendulum-v1"
     env = gym.make(DDPG_ENV_ID, render_mode=RENDER_MODE_train)
-    agent = TD3_Agent(env.observation_space.shape[0], env.action_space.shape[0],env.action_space.high[0] , DDPG_sigma,DDPG_actor_lr,DDPG_critic_lr,DPPG_tau,DDPG_gamma,DEVICE)
-    rl_utils.train_off_policy_agent(env, agent, TD3_TRAIN_EPISODES, buffer, 128, 16, MAX_STEPS, Name=ALG_NAME)
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.shape[0]
+    action_bound = env.action_space.high[0]
+    agent = TD3_Agent(state_dim,action_dim,action_bound , sigma,actor_lr,critic_lr,tau,gamma,DEVICE)
+
+    rl_utils.train_off_policy_agent(env, agent, num_episodes, buffer, minimal_size, batch_size, MAX_STEPS, Name=ALG_NAME)
     folder_path = './Saved_model/' + ALG_NAME
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
     torch.save(agent.actor.state_dict(), os.path.join(folder_path, 'model_weights_actor.pth'))
-    # torch.save(agent.critic1.state_dict(), os.path.join(folder_path, 'model_weights_critic.pth'))
     rl_utils.test_model(DDPG_ENV_ID, agent)
 
 
